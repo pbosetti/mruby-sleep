@@ -27,107 +27,50 @@
 
 #include <time.h>
 #ifdef _WIN32
-    #include <windows.h>
-    #define sleep(x) Sleep(x * 1000)
-    #define usleep(x) Sleep(((x)<1000) ? 1 : ((x)/1000))
+#include <windows.h>
+#define sleep(x) Sleep(x * 1000)
+#define usleep(x) Sleep(((x) < 1000) ? 1 : ((x) / 1000))
 #else
-    #include <unistd.h>
-    #include <sys/time.h>
+#include <unistd.h>
+#include <sys/time.h>
 #endif
 
 #include "mruby.h"
+#include "mruby/numeric.h"
 
-mrb_value mrb_f_sleep_sleep(mrb_state *mrb, mrb_value self)
-{   
-    time_t beg, end;
-    mrb_value *argv;
-    mrb_int argc;
-    int iargc;
-    
-    beg = time(0);
-    mrb_get_args(mrb, "*", &argv, &argc);
-    
-    iargc = (int)argc;
-    
-    if (iargc == 0) {
-        // not implemented forever sleep
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "wrong number of arguments");
-    } else if (iargc == 1) {
-        sleep(mrb_fixnum(argv[0]));
-    } else {
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "wrong number of arguments");
-    }
-    end = time(0) - beg;
 
-    return mrb_fixnum_value(end);
+// Revised by Paolo Bosetti in order to mimic vanilla ruby behavior
+// sleep forever is not implemented
+static mrb_value mrb_f_sleep_sleep(mrb_state *mrb, mrb_value self) {
+  time_t beg;
+  mrb_value arg;
+  mrb_float c_arg;
+  useconds_t us;
+  unsigned int s;
+  beg = time(0);
+  
+  mrb_get_args(mrb, "o", &arg);
+  
+  if (mrb_fixnum_p(arg)) {
+    sleep(mrb_fixnum(arg));
+  } 
+  else if (mrb_float_p(arg)) {
+    c_arg = mrb_to_flo(mrb, arg);
+    s = (unsigned int)c_arg;
+    us = (useconds_t)((c_arg - s) * 1e6);
+    if (s > 0)
+      sleep(s);
+    usleep(us);
+  } else {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "Only Fixnum or Float value");
+  }
+  
+  return mrb_fixnum_value(time(0) - beg);
 }
 
-mrb_value mrb_f_usleep_usleep(mrb_state *mrb, mrb_value self)
-{   
-    mrb_int argc;
-    mrb_value *argv;
-#ifdef _WIN32
-    FILETIME st_ft,ed_ft;
-    unsigned __int64 st_time = 0;
-    unsigned __int64 ed_time = 0;
-#else
-    struct timeval st_tm,ed_tm;
-#endif
-    time_t slp_tm;
-
-#ifdef _WIN32
-    GetSystemTimeAsFileTime(&st_ft);
-#else
-    gettimeofday( &st_tm, NULL );
-#endif
-
-    mrb_get_args(mrb, "*", &argv, &argc);
-
-    if(argc == 0) {
-        /* not implemented forever sleep */
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "wrong number of arguments");
-    } else if(argc == 1) {
-        usleep(mrb_fixnum(argv[0]));
-    } else {
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "wrong number of arguments");
-    }
-
-#ifdef _WIN32
-    GetSystemTimeAsFileTime(&ed_ft);
-
-    st_time |= st_ft.dwHighDateTime;
-    st_time <<=32;
-    st_time |= st_ft.dwLowDateTime;
-    ed_time |= ed_ft.dwHighDateTime;
-    ed_time <<=32;
-    ed_time |= ed_ft.dwLowDateTime;
-
-    slp_tm = (ed_time - st_time) / 10;
-#else
-    gettimeofday( &ed_tm, NULL );
-
-    if ( st_tm.tv_usec > ed_tm.tv_usec ) {
-        slp_tm = 1000000 + ed_tm.tv_usec - st_tm.tv_usec;
-    } else {
-        slp_tm = ed_tm.tv_usec - st_tm.tv_usec;
-    }
-#endif
-
-    return mrb_fixnum_value(slp_tm);
+void mrb_mruby_sleep_gem_init(mrb_state *mrb) {
+  mrb_define_method(mrb, mrb->kernel_module, "sleep", mrb_f_sleep_sleep,
+                    ARGS_REQ(1));
 }
 
-void mrb_mruby_sleep_gem_init(mrb_state *mrb)
-{
-    struct RClass *sleep;
-
-    sleep = mrb_define_module(mrb, "Sleep");
-    mrb_define_class_method(mrb, sleep, "sleep",    mrb_f_sleep_sleep,      ARGS_REQ(1));
-    mrb_define_class_method(mrb, sleep, "usleep",   mrb_f_usleep_usleep,    ARGS_REQ(1));
-
-    mrb_define_method(mrb, mrb->kernel_module, "sleep",   mrb_f_sleep_sleep,    ARGS_REQ(1));
-    mrb_define_method(mrb, mrb->kernel_module, "usleep",  mrb_f_usleep_usleep,  ARGS_REQ(1));
-}
-
-void mrb_mruby_sleep_gem_final(mrb_state *mrb)
-{
-}
+void mrb_mruby_sleep_gem_final(mrb_state *mrb) {}
