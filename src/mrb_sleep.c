@@ -34,6 +34,8 @@
 #include <unistd.h>
 #include <sys/time.h>
 #endif
+#include <errno.h>
+#include <string.h>
 
 #include "mruby.h"
 #include "mruby/numeric.h"
@@ -45,8 +47,7 @@ static mrb_value mrb_f_sleep_sleep(mrb_state *mrb, mrb_value self) {
   time_t beg;
   mrb_value arg;
   mrb_float c_arg;
-  useconds_t us;
-  unsigned int s;
+  unsigned int s, us;
   beg = time(0);
   
   mrb_get_args(mrb, "o", &arg);
@@ -57,10 +58,11 @@ static mrb_value mrb_f_sleep_sleep(mrb_state *mrb, mrb_value self) {
   else if (mrb_float_p(arg)) {
     c_arg = mrb_to_flo(mrb, arg);
     s = (unsigned int)c_arg;
-    us = (useconds_t)((c_arg - s) * 1e6);
+    us = (unsigned int)((c_arg - s) * 1e6);
     if (s > 0)
       sleep(s);
-    usleep(us);
+    if (usleep(us) != 0)
+      mrb_raise(mrb, E_RUNTIME_ERROR, strerror(errno));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "Only Fixnum or Float value");
   }
