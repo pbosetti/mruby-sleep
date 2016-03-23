@@ -72,7 +72,7 @@ static mrb_value mrb_f_sleep_sleep(mrb_state *mrb, mrb_value self) {
 
 void mrb_mruby_sleep_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, mrb->kernel_module, "sleep", mrb_f_sleep_sleep,
-                    ARGS_REQ(1));
+                    MRB_ARGS_REQ(1));
 }
 
 void mrb_mruby_sleep_gem_final(mrb_state *mrb) {}
